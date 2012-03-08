@@ -59,6 +59,46 @@ void MovePiece(int cx, int cy, int nx, int ny);
 void TakePiece(int cx, int cy, int nx, int ny);
 
 
+class Cursor
+{
+private:
+	int _x, _y, _id;
+public:
+	Cursor(int objId)
+	{
+		_id = objId;
+		
+		SetObject(_id,
+				  ATTR0_SHAPE(0) | ATTR0_8BPP | ATTR0_REG | ATTR0_Y(0),
+				  ATTR1_SIZE(1) | ATTR1_X(0),
+				  ATTR2_ID8(0));
+		
+		_x = 0;
+		_y = 0;
+		
+		SetObjectX(_id, (_x + BOARD_OFFSET_X / 2) * 16);
+		SetObjectY(_id, (_y + BOARD_OFFSET_Y / 2) * 16);
+	}
+	int X()
+	{
+		return _x;
+	}
+	int Y()
+	{
+		return _y;
+	}
+	void Move(int xMove, int yMove)
+	{
+		if(_x + xMove >= 0 && _x + xMove < 8)
+			_x += xMove;
+		if(_y + yMove >= 0 && _y + yMove < 8)
+			_y += yMove;
+		
+		SetObjectX(_id, (_x + BOARD_OFFSET_X / 2) * 16);
+		SetObjectY(_id, (_y + BOARD_OFFSET_Y / 2) * 16);
+	}
+};
+
 void DrawString(int x, int y, const char* line, int lineLength)
 {
 	for(int i = 0; i < lineLength; i++)
@@ -72,7 +112,8 @@ int main()
 	InitialiseStage();
 	
 	uint16_t oldKeys = REG_P1;
-	int cursorX = 0, cursorY = 0;
+	
+	Cursor cursor = Cursor(0);
 	
 	bool pieceSelected = false;
 	int currentPiece = 0;
@@ -88,30 +129,23 @@ int main()
 	while (true)
 	{
 		if(!(REG_P1 & KEY_RIGHT) && (oldKeys & KEY_RIGHT))
-			if(cursorX < 7)
-				cursorX++;
+			cursor.Move(1,  0);
 		if(!(REG_P1 & KEY_LEFT) && (oldKeys & KEY_LEFT))
-			if(cursorX > 0)
-				cursorX--;
+			cursor.Move(-1, 0);
 		if(!(REG_P1 & KEY_DOWN) && (oldKeys & KEY_DOWN))
-			if(cursorY < 7)
-				cursorY++;
+			cursor.Move(0,  1);
 		if(!(REG_P1 & KEY_UP) && (oldKeys & KEY_UP))
-			if(cursorY > 0)
-				cursorY--;
-	
-		SetObjectX(0, (cursorX + BOARD_OFFSET_X/2) * 16);
-		SetObjectY(0, (cursorY + BOARD_OFFSET_Y/2) * 16);
+			cursor.Move(0, -1);
 		
 		if(!(REG_P1 & KEY_A) && (oldKeys & KEY_A))
 		{
-			if(PieceAt(cursorX, cursorY))
+			if(PieceAt(cursor.X(), cursor.Y()))
 			{
 				pieceSelected = true;
 				for(int i = 0; i < 16 && takingMoves[i] >= 0; i++)
-					if(takingMoves[i] % 8 == cursorX && takingMoves[i] / 8 == cursorY)
+					if(takingMoves[i] % 8 == cursor.X() && takingMoves[i] / 8 == cursor.Y())
 					{
-						TakePiece(currentPiece % 8, currentPiece / 8, cursorX, cursorY);
+						TakePiece(currentPiece % 8, currentPiece / 8, cursor.X(), cursor.Y());
 						currentTurnColor = (currentTurnColor == WHITE ? BLACK : WHITE);
 						pieceSelected = false;
 						ClearHighlights();
@@ -119,40 +153,31 @@ int main()
 						break;
 					}
 				
-				if(pieceSelected && PieceColor(cursorX, cursorY) == currentTurnColor)
+				if(pieceSelected && PieceColor(cursor.X(), cursor.Y()) == currentTurnColor)
 				{
 					ClearHighlights();
 					
-					AvailableMoves(cursorX, cursorY, moves, takingMoves);
+					AvailableMoves(cursor.X(), cursor.Y(), moves, takingMoves);
 					
-					int cursor = 0;
-					currentPiece = cursorY * 8 + cursorX;
+					currentPiece = cursor.Y() * 8 + cursor.X();
 					
-					while(cursor < 28 && moves[cursor] >= 0)
-					{
-						Highlight(moves[cursor] % 8, moves[cursor] / 8, GREEN);
-						cursor++;
-					}
+					for(int i = 0; i < 28 && moves[i] >= 0; i++)
+						Highlight(moves[i] % 8, moves[i] / 8, GREEN);
 					
-					cursor = 0;
-					
-					while(cursor < 16 && takingMoves[cursor] >= 0)
-					{
-						Highlight(takingMoves[cursor] % 8, takingMoves[cursor] / 8, RED);
-						cursor++;
-					}
+					for(int i = 0; i < 16 && takingMoves[i] >= 0; i++)
+						Highlight(takingMoves[i] % 8, takingMoves[i] / 8, RED);
 				}
 			}
 			else if(pieceSelected)
 			{
 				ClearHighlights();
 				
-				if(!PieceAt(cursorX, cursorY))
+				if(!PieceAt(cursor.X(), cursor.Y()))
 				{
 					for(int i = 0; i < 28 && moves[i] >= 0; i++)
-						if(moves[i] % 8 == cursorX && moves[i] / 8 == cursorY)
+						if(moves[i] % 8 == cursor.X() && moves[i] / 8 == cursor.Y())
 						{
-							MovePiece(currentPiece % 8, currentPiece / 8, cursorX, cursorY);
+							MovePiece(currentPiece % 8, currentPiece / 8, cursor.X(), cursor.Y());
 							currentTurnColor = (currentTurnColor == WHITE ? BLACK : WHITE);
 							pieceSelected = false;
 							break;
@@ -454,11 +479,6 @@ void InitialiseStage()
 	REG_BG1CNT = BG_CBB(1) | BG_SBB(29) | BG_8BPP | BG_REG_32x32;
 	REG_BG2CNT = BG_CBB(1) | BG_SBB(28) | BG_8BPP | BG_REG_32x32;
 	REG_BG3CNT = BG_CBB(1) | BG_SBB(27) | BG_8BPP | BG_REG_32x32;
-	
-	SetObject(0,
-	          ATTR0_SHAPE(0) | ATTR0_8BPP | ATTR0_REG | ATTR0_Y(0),
-			  ATTR1_SIZE(1) | ATTR1_X(0),
-			  ATTR2_ID8(0));
 	
 	DrawChessBoard();
 	PlacePieces();
